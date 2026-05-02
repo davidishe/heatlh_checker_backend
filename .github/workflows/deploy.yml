@@ -19,28 +19,65 @@ jobs:
           script_stop: true
           script: |
             set -e
-            mkdir -p /var/apps/backend/heatlh_checker_backend
-            if [ ! -d /var/apps/backend/heatlh_checker_backend/.git ]; then
-              if [ -z "$(ls -A /var/apps/backend/heatlh_checker_backend 2>/dev/null)" ]; then
-                git clone https://github.com/${{ github.repository }}.git /var/apps/backend/heatlh_checker_backend
+            APP_DIR=/var/apps/backend/heatlh_checker_backend
+            mkdir -p "$APP_DIR"
+            if [ ! -d "$APP_DIR/.git" ]; then
+              if [ -z "$(ls -A "$APP_DIR" 2>/dev/null)" ]; then
+                git clone https://github.com/${{ github.repository }}.git "$APP_DIR"
               else
-                cd /var/apps/backend/heatlh_checker_backend
+                cd "$APP_DIR"
                 git init
                 git remote remove origin || true
                 git remote add origin https://github.com/${{ github.repository }}.git
               fi
             fi
-            cd /var/apps/backend/heatlh_checker_backend
+
+            cd "$APP_DIR"
             git fetch origin main
             git reset --hard origin/main
-            if [ -f .env.example ] && [ ! -f .env ]; then
-              cp .env.example .env
-            fi
+
+            touch .env
             if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ]; then
-              touch .env
               sed -i '/^TELEGRAM_BOT_TOKEN=/d' .env
               echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
             fi
-            if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
-              docker compose up -d --build
+            if [ -n "${{ secrets.CHAT_ID }}" ]; then
+              sed -i '/^CHAT_ID=/d' .env
+              echo "CHAT_ID=${{ secrets.CHAT_ID }}" >> .env
             fi
+
+            python3 -m venv .venv
+            . .venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
+
+            sudo tee /etc/systemd/system/heatlh-checker-run.service >/dev/null <<'EOF'
+            [Unit]
+            Description=Heatlh checker URL scan (oneshot)
+            After=network-online.target
+            Wants=network-online.target
+
+            [Service]
+            Type=oneshot
+            WorkingDirectory=/var/apps/backend/heatlh_checker_backend
+            EnvironmentFile=/var/apps/backend/heatlh_checker_backend/.env
+            ExecStart=/var/apps/backend/heatlh_checker_backend/.venv/bin/python /var/apps/backend/heatlh_checker_backend/checker.py
+            EOF
+
+            sudo tee /etc/systemd/system/heatlh-checker-run.timer >/dev/null <<'EOF'
+            [Unit]
+            Description=Run heatlh checker every 5 minutes
+
+            [Timer]
+            OnCalendar=*:0/5
+            Persistent=true
+            Unit=heatlh-checker-run.service
+
+            [Install]
+            WantedBy=timers.target
+            EOF
+
+            sudo systemctl daemon-reload
+            sudo systemctl enable --now heatlh-checker-run.timer
+            sudo systemctl restart heatlh-checker-run.timer
+            sudo systemctl start heatlh-checker-run.service || true
