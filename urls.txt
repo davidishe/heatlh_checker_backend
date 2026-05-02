@@ -3,3 +3,5 @@ https://payload.terraplatform.space/health_check
 https://terraplatform.space
 
 https://payload.tokenova.space/health_check
+https://tokenova.space
+https://api.tokenova.space/api/account/health_check
