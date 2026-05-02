@@ -21,7 +21,14 @@ jobs:
             set -e
             mkdir -p /var/apps/backend/heatlh_checker_backend
             if [ ! -d /var/apps/backend/heatlh_checker_backend/.git ]; then
-              git clone git@github.com:${{ github.repository }}.git /var/apps/backend/heatlh_checker_backend
+              if [ -z "$(ls -A /var/apps/backend/heatlh_checker_backend 2>/dev/null)" ]; then
+                git clone git@github.com:${{ github.repository }}.git /var/apps/backend/heatlh_checker_backend
+              else
+                cd /var/apps/backend/heatlh_checker_backend
+                git init
+                git remote remove origin || true
+                git remote add origin git@github.com:${{ github.repository }}.git
+              fi
             fi
             cd /var/apps/backend/heatlh_checker_backend
             git fetch origin main
