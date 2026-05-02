@@ -1,0 +1,39 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT }}
+          script_stop: true
+          script: |
+            set -e
+            mkdir -p /var/apps/backend/heatlh_checker_backend
+            if [ ! -d /var/apps/backend/heatlh_checker_backend/.git ]; then
+              git clone git@github.com:${{ github.repository }}.git /var/apps/backend/heatlh_checker_backend
+            fi
+            cd /var/apps/backend/heatlh_checker_backend
+            git fetch origin main
+            git reset --hard origin/main
+            if [ -f .env.example ] && [ ! -f .env ]; then
+              cp .env.example .env
+            fi
+            if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ]; then
+              touch .env
+              sed -i '/^TELEGRAM_BOT_TOKEN=/d' .env
+              echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
+            fi
+            if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
+              docker compose up -d --build
+            fi
