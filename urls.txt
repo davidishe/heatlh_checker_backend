@@ -5,3 +5,5 @@ https://terraplatform.space
 https://payload.tokenova.space/health_check
 https://tokenova.space
 https://api.tokenova.space/api/account/health_check
+
+https://inspector.terraplatform.space/api/health/tls
